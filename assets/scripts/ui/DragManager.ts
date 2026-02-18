@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, EventTouch, Vec3, UITransform, Camera, view, input, Input } from 'cc';
+import { _decorator, Component, Node, EventTouch, Vec3, UITransform, input, Input } from 'cc';
 import { BaseItem } from '../item/BaseItem';
 import { ItemDisplay } from './ItemDisplay';
 const { ccclass } = _decorator;
@@ -12,7 +12,7 @@ export class DragManager extends Component {
   private static _instance: DragManager | null = null;
   private _draggingItem: BaseItem | null = null;
   private _dragPreviewNode: Node | null = null;
-  private _dragOffset: Vec3 = new Vec3();
+  private _anchorCenterOffset: Vec3 = new Vec3();
   private _isDragging: boolean = false;
   private _sourceSlot: Node | null = null;
 
@@ -48,19 +48,16 @@ export class DragManager extends Component {
     this.createDragPreview(item, cellSize, spacing);
     console.log(`[DragManager] 拖拽预览已创建，cellSize: ${cellSize}, spacing: ${spacing}`);
 
-    // 计算拖拽偏移（考虑锚点）
+    // 计算"锚点方块中心"相对于预览节点中心的偏移，保证触点与锚点对齐
+    const step = cellSize + spacing;
+    const totalWidth = item.width * cellSize + (item.width - 1) * spacing;
+    const totalHeight = item.height * cellSize + (item.height - 1) * spacing;
+    const anchorCenterX = -totalWidth / 2 + cellSize / 2 + item.anchorCol * step;
+    const anchorCenterY = totalHeight / 2 - cellSize / 2 - item.anchorRow * step;
+    this._anchorCenterOffset.set(anchorCenterX, anchorCenterY, 0);
+
     const worldPos = touch.getUILocation();
-    const localPos = new Vec3();
-    if (this._dragPreviewNode) {
-      const uiTransform = this._dragPreviewNode.getComponent(UITransform);
-      if (uiTransform) {
-        this.node.getComponent(UITransform)?.convertToNodeSpaceAR(new Vec3(worldPos.x, worldPos.y, 0), localPos);
-        // 计算锚点偏移
-        const anchorOffsetX = item.anchorCol * (cellSize + spacing);
-        const anchorOffsetY = -item.anchorRow * (cellSize + spacing);
-        this._dragOffset.set(localPos.x - anchorOffsetX, localPos.y - anchorOffsetY, 0);
-      }
-    }
+    this.updateDragPreviewPosition(worldPos.x, worldPos.y);
 
     // 监听全局触摸移动和结束事件
     input.on(Input.EventType.TOUCH_MOVE, this.onTouchMove, this);
@@ -85,7 +82,7 @@ export class DragManager extends Component {
     const totalHeight = item.height * cellSize + (item.height - 1) * spacing;
     uiTransform.setContentSize(totalWidth, totalHeight);
     
-    // 使用中心锚点，与仓库格子和放置的物品一致
+    // 统一使用中心锚点，便于计算锚点方块中心偏移
     uiTransform.setAnchorPoint(0.5, 0.5);
 
     const display = this._dragPreviewNode.addComponent(ItemDisplay);
@@ -106,10 +103,26 @@ export class DragManager extends Component {
     if (!this._isDragging || !this._dragPreviewNode) return;
 
     const worldPos = event.getUILocation();
+    this.updateDragPreviewPosition(worldPos.x, worldPos.y);
+  }
+
+  private updateDragPreviewPosition(uiX: number, uiY: number): void {
+    if (!this._dragPreviewNode) {
+      return;
+    }
+
     const localPos = new Vec3();
-    this.node.getComponent(UITransform)?.convertToNodeSpaceAR(new Vec3(worldPos.x, worldPos.y, 0), localPos);
-    
-    this._dragPreviewNode.setPosition(localPos.x, localPos.y, 0);
+    const rootTransform = this.node.getComponent(UITransform);
+    if (!rootTransform) {
+      return;
+    }
+    rootTransform.convertToNodeSpaceAR(new Vec3(uiX, uiY, 0), localPos);
+
+    this._dragPreviewNode.setPosition(
+      localPos.x - this._anchorCenterOffset.x,
+      localPos.y - this._anchorCenterOffset.y,
+      0
+    );
   }
 
   /**

@@ -43,6 +43,56 @@ export class Warehouse extends Component {
   private _previewNode: Node | null = null;
   private _dragManager: DragManager | null = null;
 
+  private getCellStep(): number {
+    return this.cellSize + this.spacing;
+  }
+
+  private getWarehouseTopLeft(): Vec3 {
+    const totalWidth = this.columns * this.cellSize + (this.columns - 1) * this.spacing;
+    const totalHeight = this.rows * this.cellSize + (this.rows - 1) * this.spacing;
+    return new Vec3(-totalWidth / 2, totalHeight / 2, 0);
+  }
+
+  private uiToLocalPos(uiX: number, uiY: number): Vec3 | null {
+    const uiTransform = this.node.getComponent(UITransform);
+    if (!uiTransform) {
+      return null;
+    }
+
+    const localPos = new Vec3();
+    uiTransform.convertToNodeSpaceAR(new Vec3(uiX, uiY, 0), localPos);
+    return localPos;
+  }
+
+  /**
+   * 仓库本地坐标转换为网格坐标（返回物品左上角第一个方块的位置）
+   */
+  public localToGrid(localPos: Vec3, item?: BaseItem): { row: number; col: number } | null {
+    const step = this.getCellStep();
+    const topLeft = this.getWarehouseTopLeft();
+
+    // 先计算鼠标命中的锚点格子（统一吸附口径）
+    const anchorCol = Math.floor((localPos.x - topLeft.x + this.cellSize * 0.5) / step);
+    const anchorRow = Math.floor((topLeft.y - localPos.y + this.cellSize * 0.5) / step);
+
+    if (anchorRow < 0 || anchorRow >= this.rows || anchorCol < 0 || anchorCol >= this.columns) {
+      return null;
+    }
+
+    const row = anchorRow - (item?.anchorRow ?? 0);
+    const col = anchorCol - (item?.anchorCol ?? 0);
+    return { row, col };
+  }
+
+  /**
+   * 网格坐标转换为仓库本地坐标（物品左上角第一个方块的左上角）
+   */
+  public gridToLocalTopLeft(row: number, col: number): Vec3 {
+    const step = this.getCellStep();
+    const topLeft = this.getWarehouseTopLeft();
+    return new Vec3(topLeft.x + col * step, topLeft.y - row * step, 0);
+  }
+
   protected onLoad(): void {
     this.createWarehouse();
   }
@@ -111,8 +161,9 @@ export class Warehouse extends Component {
     uiTransform.setAnchorPoint(0, 1); // 左上角锚点
 
     // 计算位置（左上角位置）
-    const x = startX - this.cellSize / 2 + col * (this.cellSize + this.spacing);
-    const y = startY + this.cellSize / 2 - row * (this.cellSize + this.spacing);
+    // startX, startY 已经是第一个格子的左上角
+    const x = startX + col * (this.cellSize + this.spacing);
+    const y = startY - row * (this.cellSize + this.spacing);
     cellNode.setPosition(x, y, 0);
 
     // 添加Graphics组件绘制正方形
@@ -127,10 +178,9 @@ export class Warehouse extends Component {
    */
   private drawCell(graphics: Graphics): void {
     graphics.clear();
-
-    const halfSize = this.cellSize / 2;
-    const x = -halfSize;
-    const y = -halfSize;
+    // 对齐左上角锚点 (0, 1)：节点局部原点在左上角
+    const x = 0;
+    const y = -this.cellSize;
 
     // 绘制填充
     graphics.fillColor = this.fillColor;
@@ -242,13 +292,15 @@ export class Warehouse extends Component {
       return;
     }
 
-    // 将世界坐标转换为仓库本地坐标
-    const worldPos = event.getUILocation();
-    const localPos = new Vec3();
-    this.node.getComponent(UITransform)?.convertToNodeSpaceAR(new Vec3(worldPos.x, worldPos.y, 0), localPos);
+    const uiPos = event.getUILocation();
+    const localPos = this.uiToLocalPos(uiPos.x, uiPos.y);
+    if (!localPos) {
+      this.hidePreview();
+      return;
+    }
 
-    // 计算应该放置的行列（使用锚点）
-    const gridPos = this.worldToGrid(localPos, item);
+    // 计算应该放置的行列（使用统一锚点管线）
+    const gridPos = this.localToGrid(localPos, item);
     if (gridPos) {
       const { row, col } = gridPos;
       const canPlace = this.canPlaceItem(item, row, col);
@@ -284,38 +336,16 @@ export class Warehouse extends Component {
 
     console.log(`[Warehouse] 开始处理放置，物品: ${item.name}`);
 
-    // 检查是否在仓库范围内
-    const worldPos = event.getUILocation();
-    const localPos = new Vec3();
-    const uiTransform = this.node.getComponent(UITransform);
-    if (!uiTransform) {
-      console.log(`[Warehouse] UITransform 不存在`);
+    const uiPos = event.getUILocation();
+    const localPos = this.uiToLocalPos(uiPos.x, uiPos.y);
+    if (!localPos) {
       this.hidePreview();
       this._dragManager.endDrag();
       return;
     }
 
-    uiTransform.convertToNodeSpaceAR(new Vec3(worldPos.x, worldPos.y, 0), localPos);
-    console.log(`[Warehouse] 本地坐标: (${localPos.x}, ${localPos.y})`);
-    
-    // 检查是否在仓库区域内
-    const size = uiTransform.contentSize;
-    const halfWidth = size.width / 2;
-    const halfHeight = size.height / 2;
-    
-    console.log(`[Warehouse] 仓库大小: ${size.width}x${size.height}, 边界: ±${halfWidth}, ±${halfHeight}`);
-    
-    if (localPos.x < -halfWidth || localPos.x > halfWidth ||
-        localPos.y < -halfHeight || localPos.y > halfHeight) {
-      // 不在仓库范围内，取消放置
-      console.log(`[Warehouse] 不在仓库范围内，取消放置`);
-      this.hidePreview();
-      this._dragManager.endDrag();
-      return;
-    }
-
-    // 计算放置位置（使用锚点）
-    const gridPos = this.worldToGrid(localPos, item);
+    // 计算放置位置（使用统一锚点管线）
+    const gridPos = this.localToGrid(localPos, item);
     if (gridPos) {
       const { row, col } = gridPos;
       console.log(`[Warehouse] 尝试放置物品到位置: (${row}, ${col}), 物品锚点: (${item.anchorRow}, ${item.anchorCol})`);
@@ -348,43 +378,6 @@ export class Warehouse extends Component {
     this.hidePreview();
     // 结束拖拽
     this._dragManager.endDrag();
-  }
-
-  /**
-   * 世界坐标转换为网格坐标
-   * @param worldPos 世界坐标（仓库本地坐标）
-   * @param item 物品（可选，如果有物品则返回物品左上角第一个方块应该放置的位置）
-   * @returns 网格坐标 {row, col}，表示物品左上角第一个方块的位置
-   */
-  private worldToGrid(worldPos: Vec3, item?: BaseItem): { row: number; col: number } | null {
-    const uiTransform = this.getComponent(UITransform);
-    if (!uiTransform) return null;
-
-    const size = uiTransform.contentSize;
-    // 第一个格子的中心位置
-    const startX = -size.width / 2 + this.cellSize / 2;
-    const startY = size.height / 2 - this.cellSize / 2;
-
-    // 计算相对于起始位置的偏移
-    const offsetX = worldPos.x - startX;
-    const offsetY = startY - worldPos.y;
-
-    // 计算鼠标位置对应的格子（中心点）
-    let col = Math.round(offsetX / (this.cellSize + this.spacing));
-    let row = Math.round(offsetY / (this.cellSize + this.spacing));
-
-    // 如果有物品，需要调整：鼠标位置对应的是锚点方块，需要转换为左上角第一个方块的位置
-    if (item) {
-      col = col - item.anchorCol;
-      row = row - item.anchorRow;
-    }
-
-    // 检查是否在有效范围内（物品左上角第一个方块的位置）
-    if (row >= 0 && row < this.rows && col >= 0 && col < this.columns) {
-      return { row, col };
-    }
-
-    return null;
   }
 
   /**
@@ -436,45 +429,20 @@ export class Warehouse extends Component {
       return false;
     }
 
-    // 计算位置（考虑锚点）
-    // 仓库格子的起始位置（第一个格子的中心）
-    const totalWidth = this.columns * this.cellSize + (this.columns - 1) * this.spacing;
-    const totalHeight = this.rows * this.cellSize + (this.rows - 1) * this.spacing;
-    const startX = -totalWidth / 2 + this.cellSize / 2;
-    const startY = totalHeight / 2 - this.cellSize / 2;
-    
-    // 计算物品左上角第一个方块应该放置的格子位置
-    // row, col 是物品左上角第一个方块的位置
-    // 锚点方块的位置 = (row + anchorRow, col + anchorCol)
-    // 锚点方块的中心位置
-    const anchorGridCol = col + item.anchorCol;
-    const anchorGridRow = row + item.anchorRow;
-    const anchorCenterX = startX + anchorGridCol * (this.cellSize + this.spacing);
-    const anchorCenterY = startY - anchorGridRow * (this.cellSize + this.spacing);
-    
-    // 计算物品容器的中心位置
-    // 物品左上角第一个方块的位置
-    const itemTopLeftCol = col;
-    const itemTopLeftRow = row;
-    const itemTopLeftCenterX = startX + itemTopLeftCol * (this.cellSize + this.spacing);
-    const itemTopLeftCenterY = startY - itemTopLeftRow * (this.cellSize + this.spacing);
-    
-    // 物品容器的尺寸
-    const itemTotalWidth = item.width * this.cellSize + (item.width - 1) * this.spacing;
-    const itemTotalHeight = item.height * this.cellSize + (item.height - 1) * this.spacing;
-    
-    // 物品容器的中心位置（基于左上角第一个方块的中心）
-    const itemCenterX = itemTopLeftCenterX + (itemTotalWidth / 2) - (this.cellSize / 2);
-    const itemCenterY = itemTopLeftCenterY - (itemTotalHeight / 2) + (this.cellSize / 2);
+    const itemTopLeft = this.gridToLocalTopLeft(row, col);
 
     // 创建已放置的物品节点
     const placedNode = new Node(`PlacedItem_${this._placedItems.length}`);
     const uiTransform = placedNode.addComponent(UITransform);
+    
+    // 物品容器的尺寸
+    const itemTotalWidth = item.width * this.cellSize + (item.width - 1) * this.spacing;
+    const itemTotalHeight = item.height * this.cellSize + (item.height - 1) * this.spacing;
     uiTransform.setContentSize(itemTotalWidth, itemTotalHeight);
     
-    // 使用中心锚点，与仓库格子一致
-    uiTransform.setAnchorPoint(0.5, 0.5);
-    placedNode.setPosition(itemCenterX, itemCenterY, 0);
+    // 使用左上角锚点
+    uiTransform.setAnchorPoint(0, 1);
+    placedNode.setPosition(itemTopLeft.x, itemTopLeft.y, 0);
 
     // 先添加到父节点，确保组件能正确初始化
     this.node.addChild(placedNode);
@@ -509,8 +477,8 @@ export class Warehouse extends Component {
     const itemTotalHeight = item.height * this.cellSize + (item.height - 1) * this.spacing;
     uiTransform.setContentSize(itemTotalWidth, itemTotalHeight);
     
-    // 使用中心锚点，与仓库格子和放置的物品一致
-    uiTransform.setAnchorPoint(0.5, 0.5);
+    // 使用左上角锚点
+    uiTransform.setAnchorPoint(0, 1);
 
     const graphics = previewNode.addComponent(Graphics);
     const occupiedPositions = item.getOccupiedPositions();
@@ -518,32 +486,19 @@ export class Warehouse extends Component {
     graphics.clear();
     graphics.fillColor = canPlace ? this.validPlaceColor : this.invalidPlaceColor;
 
-    // 计算相对于容器中心的偏移（左上角第一个方块的中心位置）
-    const startX = -(itemTotalWidth / 2) + this.cellSize / 2;
-    const startY = (itemTotalHeight / 2) - this.cellSize / 2;
+    // 计算相对于容器左上角的偏移
+    const startX = 0;
+    const startY = 0;
 
     for (const [itemRow, itemCol] of occupiedPositions) {
       const x = startX + itemCol * (this.cellSize + this.spacing);
-      const y = startY - itemRow * (this.cellSize + this.spacing);
+      const y = startY - itemRow * (this.cellSize + this.spacing) - this.cellSize;
       graphics.rect(x, y, this.cellSize, this.cellSize);
     }
     graphics.fill();
 
-    // 计算位置（与 placeItem 使用相同的计算方式）
-    const totalWidth = this.columns * this.cellSize + (this.columns - 1) * this.spacing;
-    const totalHeight = this.rows * this.cellSize + (this.rows - 1) * this.spacing;
-    const warehouseStartX = -totalWidth / 2 + this.cellSize / 2;
-    const warehouseStartY = totalHeight / 2 - this.cellSize / 2;
-    
-    // 物品左上角第一个方块的中心位置
-    const itemTopLeftCenterX = warehouseStartX + col * (this.cellSize + this.spacing);
-    const itemTopLeftCenterY = warehouseStartY - row * (this.cellSize + this.spacing);
-    
-    // 物品容器的中心位置
-    const itemCenterX = itemTopLeftCenterX + (itemTotalWidth / 2) - (this.cellSize / 2);
-    const itemCenterY = itemTopLeftCenterY - (itemTotalHeight / 2) + (this.cellSize / 2);
-    
-    previewNode.setPosition(itemCenterX, itemCenterY, 0);
+    const itemTopLeft = this.gridToLocalTopLeft(row, col);
+    previewNode.setPosition(itemTopLeft.x, itemTopLeft.y, 0);
 
     this.node.addChild(previewNode);
     this._previewNode = previewNode;

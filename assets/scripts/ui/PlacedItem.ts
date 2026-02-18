@@ -82,14 +82,14 @@ export class PlacedItem extends Component {
     const containerTransform = this.getComponent(UITransform);
     if (containerTransform) {
       containerTransform.setContentSize(totalWidth, totalHeight);
-      // 使用中心锚点，与仓库格子一致
-      containerTransform.setAnchorPoint(0.5, 0.5);
+      // 使用左上角锚点（与父节点一致）
+      containerTransform.setAnchorPoint(0, 1);
     }
 
-    // 计算起始位置（左上角第一个方块的中心）
-    // 从容器中心向左上偏移到第一个方块的中心
-    const startX = -(totalWidth / 2) + this.cellSize / 2;
-    const startY = (totalHeight / 2) - this.cellSize / 2;
+    // 计算起始位置（左上角第一个方块的左上角）
+    // 从容器左上角开始，第一个方块的位置
+    const startX = 0;
+    const startY = 0;
 
     // 创建格子
     for (let row = 0; row < rows; row++) {
@@ -123,9 +123,9 @@ export class PlacedItem extends Component {
     // 添加UITransform
     const uiTransform = cellNode.addComponent(UITransform);
     uiTransform.setContentSize(this.cellSize, this.cellSize);
-    uiTransform.setAnchorPoint(0.5, 0.5);
+    uiTransform.setAnchorPoint(0, 1); // 左上角锚点
 
-    // 计算位置
+    // 计算位置（左上角位置）
     const x = startX + col * (this.cellSize + this.spacing);
     const y = startY - row * (this.cellSize + this.spacing);
     cellNode.setPosition(x, y, 0);
@@ -142,10 +142,9 @@ export class PlacedItem extends Component {
    */
   private drawCell(graphics: Graphics, color: Color): void {
     graphics.clear();
-
-    const halfSize = this.cellSize / 2;
-    const x = -halfSize;
-    const y = -halfSize;
+    // 对齐左上角锚点 (0, 1)：节点局部原点在左上角
+    const x = 0;
+    const y = -this.cellSize;
 
     // 绘制填充 - 确保颜色正确设置
     const fillColor = new Color(color.r, color.g, color.b, color.a);
