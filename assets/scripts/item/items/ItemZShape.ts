@@ -1,4 +1,4 @@
-import { BaseItem } from '../BaseItem';
+import { BaseItem, ItemType } from '../BaseItem';
 import { ItemShapes, ItemColors } from '../ItemShapes';
 
 /**
@@ -12,7 +12,7 @@ export class ItemZShape extends BaseItem {
       ItemShapes.Z_SHAPE,
       ItemColors.PINK,
       '一个Z形的物品',
-      'z_shape'
+      ItemType.PROP
     );
   }
 }

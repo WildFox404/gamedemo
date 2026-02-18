@@ -1,4 +1,4 @@
-import { BaseItem } from '../BaseItem';
+import { BaseItem, ItemType } from '../BaseItem';
 import { ItemShapes, ItemColors } from '../ItemShapes';
 
 /**
@@ -12,7 +12,7 @@ export class ItemBarVertical3 extends BaseItem {
       ItemShapes.BAR_VERTICAL_3,
       ItemColors.PURPLE,
       '一个纵向3格的长条物品',
-      'bar'
+      ItemType.PROP
     );
   }
 }

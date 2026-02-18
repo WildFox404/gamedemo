@@ -1,4 +1,4 @@
-import { BaseItem } from '../BaseItem';
+import { BaseItem, ItemType } from '../BaseItem';
 import { ItemShapes, ItemColors } from '../ItemShapes';
 
 /**
@@ -12,7 +12,7 @@ export class ItemSquare2x2 extends BaseItem {
       ItemShapes.SQUARE_2X2,
       ItemColors.RED,
       '一个2x2的正方形物品',
-      'square'
+      ItemType.PROP
     );
   }
 }

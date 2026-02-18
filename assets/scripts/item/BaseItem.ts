@@ -8,6 +8,16 @@ import { Color } from 'cc';
 export type ItemShape = number[][];
 
 /**
+ * 物品类型枚举
+ */
+export enum ItemType {
+  /** 道具类 */
+  PROP = 'prop',
+  /** 召唤物类 */
+  SUMMON = 'summon',
+}
+
+/**
  * 物品基类
  * 所有物品都应该继承此类
  */
@@ -41,7 +51,7 @@ export class BaseItem {
   /**
    * 物品类型（用于分类）
    */
-  public readonly type: string;
+  public readonly type: ItemType;
 
   /**
    * 锚点行（相对于形状的左上角，用于确定放置位置）
@@ -90,7 +100,7 @@ export class BaseItem {
     shape: ItemShape,
     color: Color,
     description: string = '',
-    type: string = 'default',
+    type: ItemType = ItemType.PROP,
     anchorRow: number = 0,
     anchorCol: number = 0
   ) {

@@ -554,7 +554,13 @@ export class Warehouse extends Component {
       return false;
     }
 
-    const index = this._placedItems.findIndex(data => data.node === placedNode);
+    const uiPos = touch.getUILocation();
+    const targetData = this.findTopPlacedItemAtTouch(uiPos.x, uiPos.y, placedNode);
+    if (!targetData) {
+      return false;
+    }
+
+    const index = this._placedItems.findIndex(data => data === targetData);
     if (index < 0) {
       return false;
     }
@@ -595,5 +601,64 @@ export class Warehouse extends Component {
         itemSlot.removeItem();
       }
     }
+  }
+
+  /**
+   * 找到点击点命中的最上层已放置物品（按真实占用格命中，不按矩形包围盒）
+   */
+  private findTopPlacedItemAtTouch(uiX: number, uiY: number, preferredNode?: Node): PlacedItemData | null {
+    const candidates = this._placedItems.filter(data => this.isTouchOnPlacedItemOccupiedCell(data, uiX, uiY));
+    if (candidates.length === 0) {
+      return null;
+    }
+
+    // 如果首选节点本身命中占用格，优先使用它
+    if (preferredNode) {
+      const preferred = candidates.find(data => data.node === preferredNode);
+      if (preferred) {
+        return preferred;
+      }
+    }
+
+    // 否则按同层级中的显示顺序选择最上层节点
+    let top = candidates[0];
+    for (let i = 1; i < candidates.length; i++) {
+      if (candidates[i].node.getSiblingIndex() > top.node.getSiblingIndex()) {
+        top = candidates[i];
+      }
+    }
+    return top;
+  }
+
+  /**
+   * 判断点击是否命中该物品的真实占用格
+   */
+  private isTouchOnPlacedItemOccupiedCell(data: PlacedItemData, uiX: number, uiY: number): boolean {
+    const node = data.node;
+    if (!node || !node.isValid || !node.activeInHierarchy) {
+      return false;
+    }
+
+    const uiTransform = node.getComponent(UITransform);
+    if (!uiTransform) {
+      return false;
+    }
+
+    const localPos = new Vec3();
+    uiTransform.convertToNodeSpaceAR(new Vec3(uiX, uiY, 0), localPos);
+
+    // PlacedItem 使用左上角锚点 (0,1)，局部坐标 x 向右为正，y 向下为负
+    const step = this.cellSize + this.itemSpacing;
+    if (step <= 0) {
+      return false;
+    }
+
+    const col = Math.floor(localPos.x / step);
+    const row = Math.floor((-localPos.y) / step);
+    if (row < 0 || col < 0 || row >= data.item.height || col >= data.item.width) {
+      return false;
+    }
+
+    return data.item.isOccupied(row, col);
   }
 }

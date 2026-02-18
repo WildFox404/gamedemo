@@ -4,7 +4,7 @@
  */
 
 // 基类和类型
-export { BaseItem, ItemShape } from './BaseItem';
+export { BaseItem, ItemShape, ItemType } from './BaseItem';
 
 // 形状和颜色定义
 export { ItemShapes, ItemColors } from './ItemShapes';

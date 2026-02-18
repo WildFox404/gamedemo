@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, EventTouch, Vec3, UITransform, input, Input } from 'cc';
+import { _decorator, Component, Node, EventTouch, EventKeyboard, KeyCode, Vec3, UITransform, Color, input, Input } from 'cc';
 import { BaseItem } from '../item/BaseItem';
 import { ItemDisplay } from './ItemDisplay';
 const { ccclass } = _decorator;
@@ -13,6 +13,9 @@ export class DragManager extends Component {
   private _draggingItem: BaseItem | null = null;
   private _dragPreviewNode: Node | null = null;
   private _anchorCenterOffset: Vec3 = new Vec3();
+  private _lastPointerUiPos: Vec3 = new Vec3();
+  private _dragCellSize: number = 80;
+  private _dragSpacing: number = 5;
   private _isDragging: boolean = false;
   private _sourceSlot: Node | null = null;
 
@@ -39,30 +42,27 @@ export class DragManager extends Component {
       return;
     }
 
-    this._draggingItem = item;
+    // 拖拽期间使用副本，避免取消拖拽时影响原物品数据
+    this._draggingItem = item.clone();
     this._sourceSlot = sourceSlot;
     this._isDragging = true;
+    this._dragCellSize = cellSize;
+    this._dragSpacing = spacing;
     console.log(`[DragManager] 拖拽状态已设置，isDragging: ${this._isDragging}`);
 
     // 创建拖拽预览节点（使用仓库的方块大小）
-    this.createDragPreview(item, cellSize, spacing);
+    this.createDragPreview(this._draggingItem, cellSize, spacing);
     console.log(`[DragManager] 拖拽预览已创建，cellSize: ${cellSize}, spacing: ${spacing}`);
-
-    // 计算"锚点方块中心"相对于预览节点中心的偏移，保证触点与锚点对齐
-    const step = cellSize + spacing;
-    const totalWidth = item.width * cellSize + (item.width - 1) * spacing;
-    const totalHeight = item.height * cellSize + (item.height - 1) * spacing;
-    const anchorCenterX = -totalWidth / 2 + cellSize / 2 + item.anchorCol * step;
-    const anchorCenterY = totalHeight / 2 - cellSize / 2 - item.anchorRow * step;
-    this._anchorCenterOffset.set(anchorCenterX, anchorCenterY, 0);
+    this.recalculateAnchorCenterOffset(this._draggingItem, cellSize, spacing);
 
     const worldPos = touch.getUILocation();
     this.updateDragPreviewPosition(worldPos.x, worldPos.y);
 
-    // 监听全局触摸移动和结束事件
+    // 监听全局触摸移动、结束和旋转快捷键
     input.on(Input.EventType.TOUCH_MOVE, this.onTouchMove, this);
     input.on(Input.EventType.TOUCH_END, this.onTouchEnd, this);
     input.on(Input.EventType.TOUCH_CANCEL, this.onTouchCancel, this);
+    input.on(Input.EventType.KEY_DOWN, this.onKeyDown, this);
     console.log(`[DragManager] 已注册全局触摸事件`);
   }
 
@@ -111,6 +111,8 @@ export class DragManager extends Component {
       return;
     }
 
+    this._lastPointerUiPos.set(uiX, uiY, 0);
+
     const localPos = new Vec3();
     const rootTransform = this.node.getComponent(UITransform);
     if (!rootTransform) {
@@ -123,6 +125,55 @@ export class DragManager extends Component {
       localPos.y - this._anchorCenterOffset.y,
       0
     );
+  }
+
+  private onKeyDown(event: EventKeyboard): void {
+    if (!this._isDragging || !this._draggingItem) {
+      return;
+    }
+    if (event.keyCode !== KeyCode.KEY_R) {
+      return;
+    }
+
+    this.rotateDraggingItemClockwise();
+  }
+
+  private rotateDraggingItemClockwise(): void {
+    if (!this._draggingItem) {
+      return;
+    }
+
+    const rotatedItem = this.createClockwiseRotatedItem(this._draggingItem);
+    this._draggingItem = rotatedItem;
+    this.createDragPreview(rotatedItem, this._dragCellSize, this._dragSpacing);
+    this.recalculateAnchorCenterOffset(rotatedItem, this._dragCellSize, this._dragSpacing);
+    this.updateDragPreviewPosition(this._lastPointerUiPos.x, this._lastPointerUiPos.y);
+  }
+
+  private createClockwiseRotatedItem(item: BaseItem): BaseItem {
+    const rotatedShape = item.rotateClockwise();
+    const rotatedAnchorRow = item.anchorCol;
+    const rotatedAnchorCol = item.height - 1 - item.anchorRow;
+
+    return new BaseItem(
+      item.id,
+      item.name,
+      rotatedShape,
+      new Color(item.color.r, item.color.g, item.color.b, item.color.a),
+      item.description,
+      item.type,
+      rotatedAnchorRow,
+      rotatedAnchorCol
+    );
+  }
+
+  private recalculateAnchorCenterOffset(item: BaseItem, cellSize: number, spacing: number): void {
+    const step = cellSize + spacing;
+    const totalWidth = item.width * cellSize + (item.width - 1) * spacing;
+    const totalHeight = item.height * cellSize + (item.height - 1) * spacing;
+    const anchorCenterX = -totalWidth / 2 + cellSize / 2 + item.anchorCol * step;
+    const anchorCenterY = totalHeight / 2 - cellSize / 2 - item.anchorRow * step;
+    this._anchorCenterOffset.set(anchorCenterX, anchorCenterY, 0);
   }
 
   /**
@@ -150,6 +201,7 @@ export class DragManager extends Component {
     input.off(Input.EventType.TOUCH_MOVE, this.onTouchMove, this);
     input.off(Input.EventType.TOUCH_END, this.onTouchEnd, this);
     input.off(Input.EventType.TOUCH_CANCEL, this.onTouchCancel, this);
+    input.off(Input.EventType.KEY_DOWN, this.onKeyDown, this);
 
     if (this._dragPreviewNode) {
       this._dragPreviewNode.destroy();
@@ -159,6 +211,7 @@ export class DragManager extends Component {
     this._draggingItem = null;
     this._sourceSlot = null;
     this._isDragging = false;
+    this._lastPointerUiPos.set(0, 0, 0);
     console.log(`[DragManager] 拖拽已结束`);
   }
 

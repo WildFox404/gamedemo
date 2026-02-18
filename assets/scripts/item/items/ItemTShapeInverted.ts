@@ -1,4 +1,4 @@
-import { BaseItem } from '../BaseItem';
+import { BaseItem, ItemType } from '../BaseItem';
 import { ItemShapes, ItemColors } from '../ItemShapes';
 
 /**
@@ -12,7 +12,7 @@ export class ItemTShapeInverted extends BaseItem {
       ItemShapes.T_SHAPE_INVERTED,
       ItemColors.CYAN,
       '一个倒T形的物品',
-      't_shape'
+      ItemType.PROP
     );
   }
 }
