@@ -31,7 +31,7 @@ export class DragManager extends Component {
   /**
    * 开始拖拽
    */
-  public startDrag(item: BaseItem, sourceSlot: Node, touch: EventTouch, cellSize: number = 80, spacing: number = 5): void {
+  public startDrag(item: BaseItem, sourceSlot: Node | null, touch: EventTouch, cellSize: number = 80, spacing: number = 5): void {
     console.log(`[DragManager] startDrag 被调用，物品: ${item?.name || 'null'}`);
     
     if (!item) {

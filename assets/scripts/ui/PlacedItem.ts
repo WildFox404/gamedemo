@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, UITransform, Graphics, Color } from 'cc';
+import { _decorator, Component, Node, UITransform, Graphics, Color, EventTouch } from 'cc';
 import { BaseItem } from '../item/BaseItem';
 const { ccclass, property } = _decorator;
 
@@ -9,6 +9,7 @@ export interface PlacedItemData {
   item: BaseItem;
   row: number;
   col: number;
+  node: Node;
 }
 
 /**
@@ -39,10 +40,15 @@ export class PlacedItem extends Component {
   }
 
   protected onLoad(): void {
+    this.node.on(Node.EventType.TOUCH_START, this.onTouchStart, this);
     // 如果已经有物品数据，在onLoad时更新显示
     if (this._item) {
       this.updateDisplay();
     }
+  }
+
+  protected onDestroy(): void {
+    this.node.off(Node.EventType.TOUCH_START, this.onTouchStart, this);
   }
 
   /**
@@ -57,6 +63,22 @@ export class PlacedItem extends Component {
    */
   public getPosition(): { row: number; col: number } {
     return { row: this._row, col: this._col };
+  }
+
+  private onTouchStart(event: EventTouch): void {
+    if (!this._item) {
+      return;
+    }
+
+    const warehouse = this.node.parent?.getComponent('Warehouse') as any;
+    if (!warehouse || typeof warehouse.startDragFromPlacedItem !== 'function') {
+      return;
+    }
+
+    const started = warehouse.startDragFromPlacedItem(this.node, event);
+    if (started) {
+      event.propagationStopped = true;
+    }
   }
 
   /**

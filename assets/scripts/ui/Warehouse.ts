@@ -42,6 +42,7 @@ export class Warehouse extends Component {
   private _placedItems: PlacedItemData[] = [];
   private _previewNode: Node | null = null;
   private _dragManager: DragManager | null = null;
+  private _draggingPlacedData: PlacedItemData | null = null;
 
   private getCellStep(): number {
     return this.cellSize + this.spacing;
@@ -102,6 +103,7 @@ export class Warehouse extends Component {
     view.on('resize', this.centerWarehouse, this);
     input.on(Input.EventType.TOUCH_MOVE, this.onTouchMove, this);
     input.on(Input.EventType.TOUCH_END, this.onTouchEnd, this);
+    input.on(Input.EventType.TOUCH_CANCEL, this.onTouchCancel, this);
     // 在 onEnable 时重新设置拖拽管理器（此时 DragManager 应该已经创建）
     this.setupDrag();
     console.log(`[Warehouse] onEnable 被调用，已注册触摸事件`);
@@ -112,6 +114,7 @@ export class Warehouse extends Component {
     view.off('resize', this.centerWarehouse, this);
     input.off(Input.EventType.TOUCH_MOVE, this.onTouchMove, this);
     input.off(Input.EventType.TOUCH_END, this.onTouchEnd, this);
+    input.off(Input.EventType.TOUCH_CANCEL, this.onTouchCancel, this);
   }
 
   /**
@@ -357,26 +360,31 @@ export class Warehouse extends Component {
         
         if (success) {
           console.log(`[Warehouse] 放置成功！`);
-          // 从源槽位移除物品
-          const sourceSlot = (this._dragManager as any)._sourceSlot;
-          if (sourceSlot) {
-            const itemSlot = sourceSlot.getComponent(ItemSlot);
-            if (itemSlot) {
-              itemSlot.removeItem();
-            }
-          }
+          this.onDragPlaceSuccess();
         } else {
           console.warn(`[Warehouse] 放置失败`);
+          this.restoreDraggedPlacedItem();
         }
       } else {
         console.log(`[Warehouse] 不能放置（重叠或越界）`);
+        this.restoreDraggedPlacedItem();
       }
     } else {
       console.log(`[Warehouse] 位置不在有效范围内`);
+      this.restoreDraggedPlacedItem();
     }
 
     this.hidePreview();
     // 结束拖拽
+    this._dragManager.endDrag();
+  }
+
+  private onTouchCancel(event: EventTouch): void {
+    if (!this._dragManager || !this._dragManager.isDragging()) {
+      return;
+    }
+    this.restoreDraggedPlacedItem();
+    this.hidePreview();
     this._dragManager.endDrag();
   }
 
@@ -457,7 +465,7 @@ export class Warehouse extends Component {
     console.log(`[Warehouse] 放置物品: ${item.name}, 位置: (${row}, ${col}), 颜色: R=${item.color.r}, G=${item.color.g}, B=${item.color.b}`);
 
     if (addToPlacedList) {
-      this._placedItems.push({ item, row, col });
+      this._placedItems.push({ item, row, col, node: placedNode });
     }
 
     return true;
@@ -531,5 +539,53 @@ export class Warehouse extends Component {
       node.destroy();
     }
     this._placedItems = [];
+  }
+
+  public startDragFromPlacedItem(placedNode: Node, touch: EventTouch): boolean {
+    if (!this._dragManager || this._dragManager.isDragging()) {
+      return false;
+    }
+
+    const index = this._placedItems.findIndex(data => data.node === placedNode);
+    if (index < 0) {
+      return false;
+    }
+
+    const data = this._placedItems[index];
+    this._placedItems.splice(index, 1);
+    this._draggingPlacedData = data;
+    data.node.active = false;
+
+    this._dragManager.startDrag(data.item, null, touch, this.cellSize, this.spacing);
+    return true;
+  }
+
+  private restoreDraggedPlacedItem(): void {
+    if (!this._draggingPlacedData) {
+      return;
+    }
+
+    this._draggingPlacedData.node.active = true;
+    this._placedItems.push(this._draggingPlacedData);
+    this._draggingPlacedData = null;
+  }
+
+  private onDragPlaceSuccess(): void {
+    if (this._draggingPlacedData) {
+      if (this._draggingPlacedData.node && this._draggingPlacedData.node.isValid) {
+        this._draggingPlacedData.node.destroy();
+      }
+      this._draggingPlacedData = null;
+      return;
+    }
+
+    // 从源槽位移除物品
+    const sourceSlot = (this._dragManager as any)._sourceSlot;
+    if (sourceSlot) {
+      const itemSlot = sourceSlot.getComponent(ItemSlot);
+      if (itemSlot) {
+        itemSlot.removeItem();
+      }
+    }
   }
 }
