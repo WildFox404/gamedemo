@@ -22,7 +22,7 @@ export class PlacedItem extends Component {
   public cellSize: number = 80;
 
   @property({ tooltip: '格子之间的间距（像素）' })
-  public spacing: number = 5;
+  public spacing: number = 0;
 
   private _item: BaseItem | null = null;
   private _row: number = 0;

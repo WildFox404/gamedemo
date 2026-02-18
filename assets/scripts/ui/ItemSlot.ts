@@ -213,20 +213,20 @@ export class ItemSlot extends Component {
       return;
     }
 
-    // 获取仓库的cellSize和spacing
+    // 获取仓库的cellSize和物品内部间距
     let cellSize = 80;
-    let spacing = 5;
+    let itemSpacing = 0;
     if (this._warehouse) {
       cellSize = this._warehouse.cellSize || 80;
-      spacing = this._warehouse.spacing || 5;
-      console.log(`[ItemSlot] 使用仓库设置: cellSize=${cellSize}, spacing=${spacing}`);
+      itemSpacing = this._warehouse.itemSpacing ?? 0;
+      console.log(`[ItemSlot] 使用仓库设置: cellSize=${cellSize}, itemSpacing=${itemSpacing}`);
     } else {
       console.log(`[ItemSlot] 未找到仓库，使用默认值`);
     }
 
-    // 开始拖拽（传递仓库的方块大小）
+    // 开始拖拽（传递仓库方块大小与物品内部间距）
     console.log(`[ItemSlot] 开始拖拽物品: ${this._currentItem.name}`);
-    this._dragManager.startDrag(this._currentItem, this.node, event, cellSize, spacing);
+    this._dragManager.startDrag(this._currentItem, this.node, event, cellSize, itemSpacing);
   }
 
   /**

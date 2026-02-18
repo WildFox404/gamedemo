@@ -292,6 +292,7 @@
     "rows": 5,
     "cellSize": 80,
     "spacing": 5,
+    "itemSpacing": 0,
     "borderColor": {
       "__type__": "cc.Color",
       "r": 100,

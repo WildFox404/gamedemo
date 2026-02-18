@@ -12,7 +12,7 @@ export class ItemDisplay extends Component {
   public cellSize: number = 40;
 
   @property({ tooltip: '格子之间的间距（像素）' })
-  public spacing: number = 2;
+  public spacing: number = 0;
 
   @property({ tooltip: '边框颜色' })
   public borderColor: Color = new Color(50, 50, 50, 255);

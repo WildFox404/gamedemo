@@ -23,6 +23,9 @@ export class Warehouse extends Component {
   @property({ tooltip: '格子之间的间距（像素）' })
   public spacing: number = 5;
 
+  @property({ tooltip: '物品内部方块间距（像素）' })
+  public itemSpacing: number = 0;
+
   @property({ tooltip: '格子的边框颜色' })
   public borderColor: Color = new Color(100, 100, 100, 255);
 
@@ -46,6 +49,10 @@ export class Warehouse extends Component {
 
   private getCellStep(): number {
     return this.cellSize + this.spacing;
+  }
+
+  private getItemStep(): number {
+    return this.cellSize + this.itemSpacing;
   }
 
   private getWarehouseTopLeft(): Vec3 {
@@ -444,8 +451,8 @@ export class Warehouse extends Component {
     const uiTransform = placedNode.addComponent(UITransform);
     
     // 物品容器的尺寸
-    const itemTotalWidth = item.width * this.cellSize + (item.width - 1) * this.spacing;
-    const itemTotalHeight = item.height * this.cellSize + (item.height - 1) * this.spacing;
+    const itemTotalWidth = item.width * this.cellSize + (item.width - 1) * this.itemSpacing;
+    const itemTotalHeight = item.height * this.cellSize + (item.height - 1) * this.itemSpacing;
     uiTransform.setContentSize(itemTotalWidth, itemTotalHeight);
     
     // 使用左上角锚点
@@ -458,7 +465,7 @@ export class Warehouse extends Component {
     // 然后添加组件并设置物品
     const placedItem = placedNode.addComponent(PlacedItem);
     placedItem.cellSize = this.cellSize;
-    placedItem.spacing = this.spacing;
+    placedItem.spacing = this.itemSpacing;
     placedItem.setPlacedItem(item, row, col);
 
     // 调试信息
@@ -481,8 +488,8 @@ export class Warehouse extends Component {
     const uiTransform = previewNode.addComponent(UITransform);
     
     // 物品容器的尺寸
-    const itemTotalWidth = item.width * this.cellSize + (item.width - 1) * this.spacing;
-    const itemTotalHeight = item.height * this.cellSize + (item.height - 1) * this.spacing;
+    const itemTotalWidth = item.width * this.cellSize + (item.width - 1) * this.itemSpacing;
+    const itemTotalHeight = item.height * this.cellSize + (item.height - 1) * this.itemSpacing;
     uiTransform.setContentSize(itemTotalWidth, itemTotalHeight);
     
     // 使用左上角锚点
@@ -498,9 +505,10 @@ export class Warehouse extends Component {
     const startX = 0;
     const startY = 0;
 
+    const itemStep = this.getItemStep();
     for (const [itemRow, itemCol] of occupiedPositions) {
-      const x = startX + itemCol * (this.cellSize + this.spacing);
-      const y = startY - itemRow * (this.cellSize + this.spacing) - this.cellSize;
+      const x = startX + itemCol * itemStep;
+      const y = startY - itemRow * itemStep - this.cellSize;
       graphics.rect(x, y, this.cellSize, this.cellSize);
     }
     graphics.fill();
@@ -556,7 +564,7 @@ export class Warehouse extends Component {
     this._draggingPlacedData = data;
     data.node.active = false;
 
-    this._dragManager.startDrag(data.item, null, touch, this.cellSize, this.spacing);
+    this._dragManager.startDrag(data.item, null, touch, this.cellSize, this.itemSpacing);
     return true;
   }
 
