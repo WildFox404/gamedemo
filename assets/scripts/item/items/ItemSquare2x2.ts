@@ -12,7 +12,7 @@ export class ItemSquare2x2 extends BaseItem {
       ItemShapes.SQUARE_2X2,
       ItemColors.RED,
       '一个2x2的正方形物品',
-      ItemType.PROP
+      ItemType.FOOD
     );
   }
 }

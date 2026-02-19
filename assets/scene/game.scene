@@ -358,6 +358,11 @@
       "a": 200
     },
     "junkBoundaryThickness": 14,
+    "itemInfoWidth": 680,
+    "itemInfoMinHeight": 360,
+    "itemInfoOffsetX": 40,
+    "dragHoverThreshold": 16,
+    "dragHoverDelaySeconds": 0.25,
     "_id": "71b8C3zFtBuLQbowlE+Qj6"
   },
   {

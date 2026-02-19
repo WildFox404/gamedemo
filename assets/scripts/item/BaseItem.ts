@@ -2,10 +2,12 @@ import { Color } from 'cc';
 
 /**
  * 物品形状类型
- * 二维数组，1表示占用，0表示不占用
- * 例如：[[1,1],[1,1]] 表示2x2的正方形
+ * 二维数组：
+ * - 0 表示空
+ * - 1 表示占用仓库格子
+ * - 2 表示星星格（用于联动，不占用仓库格子）
  */
-export type ItemShape = number[][];
+export type ItemShape = Array<Array<0 | 1 | 2>>;
 
 /**
  * 物品类型枚举
@@ -15,6 +17,8 @@ export enum ItemType {
   PROP = 'prop',
   /** 召唤物类 */
   SUMMON = 'summon',
+  /** 食物类 */
+  FOOD = 'food',
 }
 
 /**
@@ -52,6 +56,16 @@ export class BaseItem {
    * 物品类型（用于分类）
    */
   public readonly type: ItemType;
+
+  /**
+   * 物品功能描述（用于介绍展示）
+   */
+  public readonly feature: string;
+
+  /**
+   * 星星联动目标类型限制（为空表示不限制）
+   */
+  public readonly starRequiredNeighborType: ItemType | null;
 
   /**
    * 锚点行（相对于形状的左上角，用于确定放置位置）
@@ -94,6 +108,21 @@ export class BaseItem {
     return count;
   }
 
+  /**
+   * 星星格数量（值为2的格子）
+   */
+  public get starCount(): number {
+    let count = 0;
+    for (const row of this.shape) {
+      for (const cell of row) {
+        if (cell === 2) {
+          count++;
+        }
+      }
+    }
+    return count;
+  }
+
   constructor(
     id: string,
     name: string,
@@ -101,6 +130,8 @@ export class BaseItem {
     color: Color,
     description: string = '',
     type: ItemType = ItemType.PROP,
+    feature: string = '',
+    starRequiredNeighborType: ItemType | null = null,
     anchorRow: number = 0,
     anchorCol: number = 0
   ) {
@@ -110,9 +141,22 @@ export class BaseItem {
     this.color = color;
     this.description = description;
     this.type = type;
+    this.feature = feature;
+    this.starRequiredNeighborType = starRequiredNeighborType;
     // 确保锚点在有效范围内
     this.anchorRow = Math.max(0, Math.min(anchorRow, shape.length - 1));
     this.anchorCol = Math.max(0, Math.min(anchorCol, shape.length > 0 ? shape[0].length - 1 : 0));
+  }
+
+  /**
+   * 判断目标物品是否满足星星联动条件。
+   * 未设置 starRequiredNeighborType 表示该物品星星无联动功能，一律不生效（灰色）。
+   */
+  public canStarLinkTo(target: BaseItem): boolean {
+    if (!this.starRequiredNeighborType) {
+      return false;
+    }
+    return target.type === this.starRequiredNeighborType;
   }
 
   /**
@@ -124,6 +168,22 @@ export class BaseItem {
     for (let row = 0; row < this.shape.length; row++) {
       for (let col = 0; col < this.shape[row].length; col++) {
         if (this.shape[row][col] === 1) {
+          positions.push([row, col]);
+        }
+      }
+    }
+    return positions;
+  }
+
+  /**
+   * 获取形状中所有星星格的位置（相对于左上角）
+   * @returns 位置数组，每个位置为 [row, col]
+   */
+  public getStarPositions(): Array<[number, number]> {
+    const positions: Array<[number, number]> = [];
+    for (let row = 0; row < this.shape.length; row++) {
+      for (let col = 0; col < this.shape[row].length; col++) {
+        if (this.shape[row][col] === 2) {
           positions.push([row, col]);
         }
       }
@@ -145,6 +205,32 @@ export class BaseItem {
       return false;
     }
     return this.shape[row][col] === 1;
+  }
+
+  /**
+   * 检查指定位置是否为星星格（相对于物品左上角）
+   */
+  public isStar(row: number, col: number): boolean {
+    if (row < 0 || row >= this.shape.length) {
+      return false;
+    }
+    if (col < 0 || col >= this.shape[row].length) {
+      return false;
+    }
+    return this.shape[row][col] === 2;
+  }
+
+  /**
+   * 检查是否为可交互格（占用格或星星格）
+   */
+  public isInteractiveCell(row: number, col: number): boolean {
+    if (row < 0 || row >= this.shape.length) {
+      return false;
+    }
+    if (col < 0 || col >= this.shape[row].length) {
+      return false;
+    }
+    return this.shape[row][col] !== 0;
   }
 
   /**
@@ -178,6 +264,8 @@ export class BaseItem {
       new Color(this.color.r, this.color.g, this.color.b, this.color.a),
       this.description,
       this.type,
+      this.feature,
+      this.starRequiredNeighborType,
       this.anchorRow,
       this.anchorCol
     );
@@ -199,6 +287,8 @@ export class BaseItem {
       },
       description: this.description,
       type: this.type,
+      feature: this.feature,
+      starRequiredNeighborType: this.starRequiredNeighborType,
     });
   }
 }

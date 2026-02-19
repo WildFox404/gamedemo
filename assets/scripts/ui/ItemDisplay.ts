@@ -20,14 +20,35 @@ export class ItemDisplay extends Component {
   @property({ tooltip: '边框宽度（像素）' })
   public borderWidth: number = 1;
 
+  @property({ tooltip: '星星格颜色' })
+  public starColor: Color = new Color(255, 220, 90, 255);
+
+  @property({ tooltip: '星星无效填充色' })
+  public starInactiveFillColor: Color = new Color(130, 130, 130, 255);
+
+  @property({ tooltip: '星星描边色' })
+  public starStrokeColor: Color = new Color(255, 220, 90, 255);
+
+  @property({ tooltip: '星星圆点半径比例（相对格子）' })
+  public starRadiusRatio: number = 0.28;
+
+  @property({ tooltip: '是否显示星星格（2）' })
+  public showStars: boolean = false;
+
   private _item: BaseItem | null = null;
   private _cellNodes: Node[] = [];
+  private _activeStarKeys: Set<string> = new Set<string>();
 
   /**
    * 设置要显示的物品
    */
   public setItem(item: BaseItem | null): void {
     this._item = item;
+    this.updateDisplay();
+  }
+
+  public setActiveStarKeys(keys: Set<string>): void {
+    this._activeStarKeys = new Set(keys);
     this.updateDisplay();
   }
 
@@ -75,8 +96,21 @@ export class ItemDisplay extends Component {
     // 创建格子
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {
-        if (shape[row][col] === 1) {
-          const cellNode = this.createCell(row, col, startX, startY, itemColor);
+        if (shape[row][col] !== 0) {
+          const isStar = shape[row][col] === 2;
+          if (isStar && !this.showStars) {
+            continue;
+          }
+          const isStarActive = isStar && this._activeStarKeys.has(this.getStarKey(row, col));
+          const cellNode = this.createCell(
+            row,
+            col,
+            startX,
+            startY,
+            isStar ? this.starColor : itemColor,
+            isStar,
+            isStarActive
+          );
           this.node.addChild(cellNode);
           this._cellNodes.push(cellNode);
         }
@@ -87,7 +121,15 @@ export class ItemDisplay extends Component {
   /**
    * 创建单个格子
    */
-  private createCell(row: number, col: number, startX: number, startY: number, color: Color): Node {
+  private createCell(
+    row: number,
+    col: number,
+    startX: number,
+    startY: number,
+    color: Color,
+    isStar: boolean,
+    isStarActive: boolean
+  ): Node {
     const cellNode = new Node(`Cell_${row}_${col}`);
 
     // 添加UITransform
@@ -100,9 +142,9 @@ export class ItemDisplay extends Component {
     const y = startY - row * (this.cellSize + this.spacing);
     cellNode.setPosition(x, y, 0);
 
-    // 添加Graphics组件绘制正方形
+    // 添加Graphics组件绘制格子/星星
     const graphics = cellNode.addComponent(Graphics);
-    this.drawCell(graphics, color);
+    this.drawCell(graphics, color, isStar, isStarActive);
 
     return cellNode;
   }
@@ -110,19 +152,27 @@ export class ItemDisplay extends Component {
   /**
    * 绘制单个格子
    */
-  private drawCell(graphics: Graphics, color: Color): void {
+  private drawCell(graphics: Graphics, color: Color, isStar: boolean, isStarActive: boolean): void {
     graphics.clear();
+
+    if (isStar) {
+      const radius = this.cellSize * Math.max(0.1, Math.min(this.starRadiusRatio, 0.48));
+      graphics.fillColor = isStarActive ? color : this.starInactiveFillColor;
+      graphics.circle(0, 0, radius);
+      graphics.fill();
+      graphics.strokeColor = this.starStrokeColor;
+      graphics.lineWidth = Math.max(1, this.borderWidth);
+      graphics.circle(0, 0, radius);
+      graphics.stroke();
+      return;
+    }
 
     const halfSize = this.cellSize / 2;
     const x = -halfSize;
     const y = -halfSize;
-
-    // 绘制填充
     graphics.fillColor = color;
     graphics.rect(x, y, this.cellSize, this.cellSize);
     graphics.fill();
-
-    // 绘制边框
     graphics.strokeColor = this.borderColor;
     graphics.lineWidth = this.borderWidth;
     graphics.rect(x, y, this.cellSize, this.cellSize);
@@ -143,5 +193,9 @@ export class ItemDisplay extends Component {
 
     // 清除所有子节点
     this.node.removeAllChildren();
+  }
+
+  private getStarKey(row: number, col: number): string {
+    return `${row},${col}`;
   }
 }

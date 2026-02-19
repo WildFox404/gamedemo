@@ -12,7 +12,7 @@ export class ItemZShapeInverted extends BaseItem {
       ItemShapes.Z_SHAPE_INVERTED,
       ItemColors.BROWN,
       '一个反Z形的物品',
-      ItemType.PROP
+      ItemType.FOOD
     );
   }
 }

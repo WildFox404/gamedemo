@@ -12,7 +12,7 @@ export class ItemShapes {
    */
   static readonly SQUARE_2X2: ItemShape = [
     [1, 1],
-    [1, 1],
+    [1, 2],
   ];
 
   /**
@@ -24,7 +24,7 @@ export class ItemShapes {
   static readonly L_SHAPE_1: ItemShape = [
     [1, 1],
     [1, 1],
-    [1, 0],
+    [1, 2],
   ];
 
   /**
@@ -36,7 +36,7 @@ export class ItemShapes {
   static readonly L_SHAPE_2: ItemShape = [
     [1, 1],
     [1, 1],
-    [0, 1],
+    [2, 1],
   ];
 
   /**
@@ -44,7 +44,7 @@ export class ItemShapes {
    * [[1,1,1]]
    */
   static readonly BAR_HORIZONTAL_3: ItemShape = [
-    [1, 1, 1],
+    [1, 2, 1],
   ];
 
   /**
@@ -55,7 +55,7 @@ export class ItemShapes {
    */
   static readonly BAR_VERTICAL_3: ItemShape = [
     [1],
-    [1],
+    [2],
     [1],
   ];
 
@@ -66,7 +66,7 @@ export class ItemShapes {
    */
   static readonly T_SHAPE: ItemShape = [
     [1, 1, 1],
-    [0, 1, 0],
+    [2, 1, 0],
   ];
 
   /**
@@ -75,7 +75,7 @@ export class ItemShapes {
    *  [1,1,1]]
    */
   static readonly T_SHAPE_INVERTED: ItemShape = [
-    [0, 1, 0],
+    [0, 1, 2],
     [1, 1, 1],
   ];
 
@@ -85,7 +85,7 @@ export class ItemShapes {
    *  [0,1,1]]
    */
   static readonly Z_SHAPE: ItemShape = [
-    [1, 1, 0],
+    [1, 1, 2],
     [0, 1, 1],
   ];
 
@@ -95,7 +95,7 @@ export class ItemShapes {
    *  [1,1,0]]
    */
   static readonly Z_SHAPE_INVERTED: ItemShape = [
-    [0, 1, 1],
+    [2, 1, 1],
     [1, 1, 0],
   ];
 
@@ -104,7 +104,7 @@ export class ItemShapes {
    * [[1]]
    */
   static readonly SINGLE: ItemShape = [
-    [1],
+    [1, 2],
   ];
 
   /**
@@ -112,7 +112,7 @@ export class ItemShapes {
    * [[1,1,1,1]]
    */
   static readonly BAR_HORIZONTAL_4: ItemShape = [
-    [1, 1, 1, 1],
+    [1, 2, 1, 1],
   ];
 
   /**
@@ -124,7 +124,7 @@ export class ItemShapes {
    */
   static readonly BAR_VERTICAL_4: ItemShape = [
     [1],
-    [1],
+    [2],
     [1],
     [1],
   ];

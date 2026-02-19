@@ -12,7 +12,7 @@ export class ItemSingle extends BaseItem {
       ItemShapes.SINGLE,
       ItemColors.GRAY,
       '一个单格的物品',
-      ItemType.PROP
+      ItemType.SUMMON
     );
   }
 }

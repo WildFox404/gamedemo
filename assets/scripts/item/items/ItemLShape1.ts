@@ -12,7 +12,7 @@ export class ItemLShape1 extends BaseItem {
       ItemShapes.L_SHAPE_1,
       ItemColors.BLUE,
       '一个L形的物品，缺右下角',
-      ItemType.PROP
+      ItemType.SUMMON
     );
   }
 }

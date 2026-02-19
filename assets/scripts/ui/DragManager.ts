@@ -14,10 +14,12 @@ export class DragManager extends Component {
   private _dragPreviewNode: Node | null = null;
   private _anchorCenterOffset: Vec3 = new Vec3();
   private _lastPointerUiPos: Vec3 = new Vec3();
+  private _dragStartUiPos: Vec3 = new Vec3();
   private _dragCellSize: number = 80;
   private _dragSpacing: number = 5;
   private _isDragging: boolean = false;
   private _sourceSlot: Node | null = null;
+  private _dragDisplay: ItemDisplay | null = null;
 
   public static getInstance(): DragManager {
     return DragManager._instance!;
@@ -56,6 +58,7 @@ export class DragManager extends Component {
     this.recalculateAnchorCenterOffset(this._draggingItem, cellSize, spacing);
 
     const worldPos = touch.getUILocation();
+    this._dragStartUiPos.set(worldPos.x, worldPos.y, 0);
     this.updateDragPreviewPosition(worldPos.x, worldPos.y);
 
     // 监听全局触摸移动、结束和旋转快捷键
@@ -86,8 +89,10 @@ export class DragManager extends Component {
     uiTransform.setAnchorPoint(0.5, 0.5);
 
     const display = this._dragPreviewNode.addComponent(ItemDisplay);
+    this._dragDisplay = display;
     display.cellSize = cellSize;
     display.spacing = spacing;
+    display.showStars = true;
     display.setItem(item);
 
     // 设置半透明效果
@@ -162,6 +167,8 @@ export class DragManager extends Component {
       new Color(item.color.r, item.color.g, item.color.b, item.color.a),
       item.description,
       item.type,
+      item.feature,
+      item.starRequiredNeighborType,
       rotatedAnchorRow,
       rotatedAnchorCol
     );
@@ -203,11 +210,13 @@ export class DragManager extends Component {
       this._dragPreviewNode.destroy();
       this._dragPreviewNode = null;
     }
+    this._dragDisplay = null;
 
     this._draggingItem = null;
     this._sourceSlot = null;
     this._isDragging = false;
     this._lastPointerUiPos.set(0, 0, 0);
+    this._dragStartUiPos.set(0, 0, 0);
     console.log(`[DragManager] 拖拽已结束`);
   }
 
@@ -234,5 +243,28 @@ export class DragManager extends Component {
     const worldPos = new Vec3();
     this._dragPreviewNode.getWorldPosition(worldPos);
     return worldPos;
+  }
+
+  public isDragHovering(thresholdPx: number): boolean {
+    if (!this._isDragging) {
+      return false;
+    }
+    const dx = this._lastPointerUiPos.x - this._dragStartUiPos.x;
+    const dy = this._lastPointerUiPos.y - this._dragStartUiPos.y;
+    return dx * dx + dy * dy <= thresholdPx * thresholdPx;
+  }
+
+  public setDragPreviewActiveStarKeys(keys: Set<string>): void {
+    if (!this._dragDisplay) {
+      return;
+    }
+    this._dragDisplay.setActiveStarKeys(keys);
+  }
+
+  public getCurrentPointerUiPosition(): Vec3 | null {
+    if (!this._isDragging) {
+      return null;
+    }
+    return new Vec3(this._lastPointerUiPos.x, this._lastPointerUiPos.y, 0);
   }
 }

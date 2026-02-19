@@ -12,7 +12,7 @@ export class ItemZShape extends BaseItem {
       ItemShapes.Z_SHAPE,
       ItemColors.PINK,
       '一个Z形的物品',
-      ItemType.PROP
+      ItemType.SUMMON
     );
   }
 }
