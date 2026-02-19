@@ -12,16 +12,37 @@ const { ccclass, property } = _decorator;
 @ccclass('Warehouse')
 export class Warehouse extends Component {
   @property({ tooltip: '仓库列数（宽度）' })
-  public columns: number = 7;
+  public columns: number = 10;
 
   @property({ tooltip: '仓库行数（高度）' })
-  public rows: number = 5;
+  public rows: number = 6;
 
   @property({ tooltip: '每个格子的大小（像素）' })
   public cellSize: number = 80;
 
   @property({ tooltip: '格子之间的间距（像素）' })
   public spacing: number = 5;
+
+  @property({ tooltip: '屏幕左右留白（像素）' })
+  public horizontalPadding: number = 20;
+
+  @property({ tooltip: '仓库距屏幕底部留白（像素）' })
+  public bottomPadding: number = 20;
+
+  @property({ tooltip: '背景内边距（像素）' })
+  public panelPadding: number = 12;
+
+  @property({ tooltip: '仓库背景色' })
+  public panelBackgroundColor: Color = new Color(28, 34, 46, 235);
+
+  @property({ tooltip: '仓库边框色' })
+  public panelBorderColor: Color = new Color(98, 140, 220, 255);
+
+  @property({ tooltip: '仓库边框宽度（像素）' })
+  public panelBorderWidth: number = 3;
+
+  @property({ tooltip: '仓库背景圆角（像素）' })
+  public panelCornerRadius: number = 18;
 
   @property({ tooltip: '物品内部方块间距（像素）' })
   public itemSpacing: number = 0;
@@ -46,6 +67,7 @@ export class Warehouse extends Component {
   private _previewNode: Node | null = null;
   private _dragManager: DragManager | null = null;
   private _draggingPlacedData: PlacedItemData | null = null;
+  private _backgroundNode: Node | null = null;
 
   private getCellStep(): number {
     return this.cellSize + this.spacing;
@@ -78,10 +100,22 @@ export class Warehouse extends Component {
   public localToGrid(localPos: Vec3, item?: BaseItem): { row: number; col: number } | null {
     const step = this.getCellStep();
     const topLeft = this.getWarehouseTopLeft();
+    const referencePos = item ? this.convertItemCenterToAnchorCenter(localPos, item) : localPos;
+    const gridWidth = this.columns * step - this.spacing;
+    const gridHeight = this.rows * step - this.spacing;
+
+    if (
+      referencePos.x < topLeft.x ||
+      referencePos.x > topLeft.x + gridWidth ||
+      referencePos.y > topLeft.y ||
+      referencePos.y < topLeft.y - gridHeight
+    ) {
+      return null;
+    }
 
     // 先计算鼠标命中的锚点格子（统一吸附口径）
-    const anchorCol = Math.floor((localPos.x - topLeft.x + this.cellSize * 0.5) / step);
-    const anchorRow = Math.floor((topLeft.y - localPos.y + this.cellSize * 0.5) / step);
+    const anchorCol = Math.floor((referencePos.x - topLeft.x + this.cellSize * 0.5) / step);
+    const anchorRow = Math.floor((topLeft.y - referencePos.y + this.cellSize * 0.5) / step);
 
     if (anchorRow < 0 || anchorRow >= this.rows || anchorCol < 0 || anchorCol >= this.columns) {
       return null;
@@ -90,6 +124,25 @@ export class Warehouse extends Component {
     const row = anchorRow - (item?.anchorRow ?? 0);
     const col = anchorCol - (item?.anchorCol ?? 0);
     return { row, col };
+  }
+
+  /**
+   * 将“物品中心点”坐标换算为“锚点方块中心点”坐标，用于网格吸附
+   */
+  private convertItemCenterToAnchorCenter(centerLocalPos: Vec3, item: BaseItem): Vec3 {
+    const step = this.getCellStep();
+    const occupiedWidth = item.width * step - this.spacing;
+    const occupiedHeight = item.height * step - this.spacing;
+
+    // 以物品左上角为原点的几何量（Y 向下为正）
+    const centerX = occupiedWidth * 0.5;
+    const centerY = occupiedHeight * 0.5;
+    const anchorCenterX = item.anchorCol * step + this.cellSize * 0.5;
+    const anchorCenterY = item.anchorRow * step + this.cellSize * 0.5;
+
+    const deltaX = anchorCenterX - centerX;
+    const deltaYInLocal = -(anchorCenterY - centerY);
+    return new Vec3(centerLocalPos.x + deltaX, centerLocalPos.y + deltaYInLocal, 0);
   }
 
   /**
@@ -106,8 +159,8 @@ export class Warehouse extends Component {
   }
 
   protected onEnable(): void {
-    view.on('canvas-resize', this.centerWarehouse, this);
-    view.on('resize', this.centerWarehouse, this);
+    view.on('canvas-resize', this.onViewResize, this);
+    view.on('resize', this.onViewResize, this);
     input.on(Input.EventType.TOUCH_MOVE, this.onTouchMove, this);
     input.on(Input.EventType.TOUCH_END, this.onTouchEnd, this);
     input.on(Input.EventType.TOUCH_CANCEL, this.onTouchCancel, this);
@@ -117,8 +170,8 @@ export class Warehouse extends Component {
   }
 
   protected onDisable(): void {
-    view.off('canvas-resize', this.centerWarehouse, this);
-    view.off('resize', this.centerWarehouse, this);
+    view.off('canvas-resize', this.onViewResize, this);
+    view.off('resize', this.onViewResize, this);
     input.off(Input.EventType.TOUCH_MOVE, this.onTouchMove, this);
     input.off(Input.EventType.TOUCH_END, this.onTouchEnd, this);
     input.off(Input.EventType.TOUCH_CANCEL, this.onTouchCancel, this);
@@ -131,16 +184,26 @@ export class Warehouse extends Component {
     // 清除现有格子
     this.clearWarehouse();
 
-    // 计算仓库总尺寸
+    // 宽度铺满屏幕（左右留白）
+    const visibleSize = view.getVisibleSize();
+    const availableWidth = Math.max(0, visibleSize.width - this.horizontalPadding * 2 - this.panelPadding * 2);
+    const computedCellSize = (availableWidth - (this.columns - 1) * this.spacing) / this.columns;
+    this.cellSize = Math.max(1, Math.floor(computedCellSize));
+
+    // 计算仓库总尺寸（网格区域）
     const totalWidth = this.columns * this.cellSize + (this.columns - 1) * this.spacing;
     const totalHeight = this.rows * this.cellSize + (this.rows - 1) * this.spacing;
+    const panelWidth = totalWidth + this.panelPadding * 2;
+    const panelHeight = totalHeight + this.panelPadding * 2;
 
     // 设置容器大小
     const containerTransform = this.getComponent(UITransform);
     if (containerTransform) {
-      containerTransform.setContentSize(totalWidth, totalHeight);
+      containerTransform.setContentSize(panelWidth, panelHeight);
       containerTransform.setAnchorPoint(0.5, 0.5);
     }
+
+    this.createBackground(panelWidth, panelHeight);
 
     // 计算起始位置（左上角第一个格子的左上角）
     const startX = -totalWidth / 2;
@@ -208,7 +271,38 @@ export class Warehouse extends Component {
    * 居中仓库
    */
   private centerWarehouse(): void {
-    this.node.setPosition(0, 0, 0);
+    const visibleSize = view.getVisibleSize();
+    const uiTransform = this.getComponent(UITransform);
+    const warehouseHeight = uiTransform ? uiTransform.contentSize.height : 0;
+    const y = -visibleSize.height / 2 + warehouseHeight / 2 + this.bottomPadding;
+    this.node.setPosition(0, y, 0);
+  }
+
+  private onViewResize(): void {
+    this.refresh();
+  }
+
+  private createBackground(panelWidth: number, panelHeight: number): void {
+    const bgNode = new Node('WarehousePanelBg');
+    const uiTransform = bgNode.addComponent(UITransform);
+    uiTransform.setContentSize(panelWidth, panelHeight);
+    uiTransform.setAnchorPoint(0.5, 0.5);
+    bgNode.setPosition(0, 0, -1);
+
+    const graphics = bgNode.addComponent(Graphics);
+    graphics.clear();
+    graphics.fillColor = this.panelBackgroundColor;
+    graphics.strokeColor = this.panelBorderColor;
+    graphics.lineWidth = this.panelBorderWidth;
+
+    const x = -panelWidth / 2;
+    const y = -panelHeight / 2;
+    graphics.roundRect(x, y, panelWidth, panelHeight, this.panelCornerRadius);
+    graphics.fill();
+    graphics.stroke();
+
+    this.node.addChild(bgNode);
+    this._backgroundNode = bgNode;
   }
 
   /**
@@ -225,6 +319,8 @@ export class Warehouse extends Component {
 
     // 清除所有子节点
     this.node.removeAllChildren();
+    this._backgroundNode = null;
+    this._previewNode = null;
   }
 
   /**

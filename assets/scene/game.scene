@@ -288,10 +288,29 @@
     },
     "_enabled": true,
     "__prefab": null,
-    "columns": 7,
-    "rows": 5,
+    "columns": 10,
+    "rows": 6,
     "cellSize": 80,
     "spacing": 5,
+    "horizontalPadding": 20,
+    "bottomPadding": 20,
+    "panelPadding": 12,
+    "panelBackgroundColor": {
+      "__type__": "cc.Color",
+      "r": 28,
+      "g": 34,
+      "b": 46,
+      "a": 235
+    },
+    "panelBorderColor": {
+      "__type__": "cc.Color",
+      "r": 98,
+      "g": 140,
+      "b": 220,
+      "a": 255
+    },
+    "panelBorderWidth": 3,
+    "panelCornerRadius": 18,
     "itemSpacing": 0,
     "borderColor": {
       "__type__": "cc.Color",

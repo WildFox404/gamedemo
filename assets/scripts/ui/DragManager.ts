@@ -168,12 +168,8 @@ export class DragManager extends Component {
   }
 
   private recalculateAnchorCenterOffset(item: BaseItem, cellSize: number, spacing: number): void {
-    const step = cellSize + spacing;
-    const totalWidth = item.width * cellSize + (item.width - 1) * spacing;
-    const totalHeight = item.height * cellSize + (item.height - 1) * spacing;
-    const anchorCenterX = -totalWidth / 2 + cellSize / 2 + item.anchorCol * step;
-    const anchorCenterY = totalHeight / 2 - cellSize / 2 - item.anchorRow * step;
-    this._anchorCenterOffset.set(anchorCenterX, anchorCenterY, 0);
+    // 视觉优化：拖拽时光标位于物品中心，不再贴在锚点方块中心
+    this._anchorCenterOffset.set(0, 0, 0);
   }
 
   /**
