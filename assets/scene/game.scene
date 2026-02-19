@@ -341,6 +341,23 @@
       "b": 100,
       "a": 150
     },
+    "junkAreaHeight": 600,
+    "junkAreaGap": 16,
+    "junkAreaBackgroundColor": {
+      "__type__": "cc.Color",
+      "r": 22,
+      "g": 26,
+      "b": 36,
+      "a": 140
+    },
+    "junkAreaBorderColor": {
+      "__type__": "cc.Color",
+      "r": 120,
+      "g": 130,
+      "b": 160,
+      "a": 200
+    },
+    "junkBoundaryThickness": 14,
     "_id": "71b8C3zFtBuLQbowlE+Qj6"
   },
   {

@@ -1,8 +1,9 @@
-import { _decorator, Component, Node, UITransform, Graphics, Color, Vec3, view, EventTouch, input, Input } from 'cc';
+import { _decorator, Component, Node, UITransform, Graphics, Color, Vec2, Vec3, Size, view, EventTouch, input, Input, RigidBody2D, BoxCollider2D, ERigidBody2DType, PhysicsSystem2D } from 'cc';
 import { BaseItem } from '../item/BaseItem';
 import { PlacedItem, PlacedItemData } from './PlacedItem';
 import { DragManager } from './DragManager';
 import { ItemSlot } from './ItemSlot';
+import { ItemDisplay } from './ItemDisplay';
 const { ccclass, property } = _decorator;
 
 /**
@@ -62,12 +63,34 @@ export class Warehouse extends Component {
   @property({ tooltip: '无效放置时的预览颜色' })
   public invalidPlaceColor: Color = new Color(255, 100, 100, 150);
 
+  @property({ tooltip: '仓库上方杂物区高度（像素）' })
+  public junkAreaHeight: number = 260;
+
+  @property({ tooltip: '杂物区与仓库的间距（像素）' })
+  public junkAreaGap: number = 16;
+
+  @property({ tooltip: '杂物区背景色' })
+  public junkAreaBackgroundColor: Color = new Color(22, 26, 36, 140);
+
+  @property({ tooltip: '杂物区边框色' })
+  public junkAreaBorderColor: Color = new Color(120, 130, 160, 200);
+
+  @property({ tooltip: '杂物区边界厚度（像素）' })
+  public junkBoundaryThickness: number = 14;
+
   private _gridNodes: Node[] = [];
   private _placedItems: PlacedItemData[] = [];
   private _previewNode: Node | null = null;
   private _dragManager: DragManager | null = null;
   private _draggingPlacedData: PlacedItemData | null = null;
+  private _draggingJunkNode: Node | null = null;
+  private _draggingJunkItem: BaseItem | null = null;
+  private _draggingJunkLocalPos: Vec3 = new Vec3();
   private _backgroundNode: Node | null = null;
+  private _junkAreaNode: Node | null = null;
+  private _junkItemsNode: Node | null = null;
+  private _junkBoundaryNodes: Node[] = [];
+  private _junkItemMap: Map<Node, BaseItem> = new Map();
 
   private getCellStep(): number {
     return this.cellSize + this.spacing;
@@ -156,6 +179,7 @@ export class Warehouse extends Component {
 
   protected onLoad(): void {
     this.createWarehouse();
+    this.setupJunkArea();
   }
 
   protected onEnable(): void {
@@ -280,6 +304,7 @@ export class Warehouse extends Component {
 
   private onViewResize(): void {
     this.refresh();
+    this.setupJunkArea();
   }
 
   private createBackground(panelWidth: number, panelHeight: number): void {
@@ -303,6 +328,118 @@ export class Warehouse extends Component {
 
     this.node.addChild(bgNode);
     this._backgroundNode = bgNode;
+  }
+
+  private setupJunkArea(): void {
+    const parent = this.node.parent;
+    const warehouseTransform = this.node.getComponent(UITransform);
+    if (!parent || !warehouseTransform) {
+      return;
+    }
+
+    this.ensurePhysicsEnabled();
+
+    if (!this._junkAreaNode || !this._junkAreaNode.isValid) {
+      this._junkAreaNode = new Node('JunkArea');
+      const areaTransform = this._junkAreaNode.addComponent(UITransform);
+      areaTransform.setAnchorPoint(0.5, 0.5);
+      this._junkAreaNode.addComponent(Graphics);
+      parent.addChild(this._junkAreaNode);
+
+      this._junkItemsNode = new Node('JunkItems');
+      const itemsTransform = this._junkItemsNode.addComponent(UITransform);
+      itemsTransform.setAnchorPoint(0.5, 0.5);
+      this._junkAreaNode.addChild(this._junkItemsNode);
+
+      this._junkBoundaryNodes = [
+        this.createJunkBoundary('JunkBoundaryLeft'),
+        this.createJunkBoundary('JunkBoundaryRight'),
+        this.createJunkBoundary('JunkBoundaryBottom'),
+      ];
+      for (const boundary of this._junkBoundaryNodes) {
+        this._junkAreaNode.addChild(boundary);
+      }
+    }
+
+    const visible = view.getVisibleSize();
+    const areaWidth = Math.max(120, visible.width - this.horizontalPadding * 2);
+    const maxAvailableHeight = Math.max(120, visible.height - warehouseTransform.contentSize.height - this.bottomPadding - 40);
+    const areaHeight = Math.min(this.junkAreaHeight, maxAvailableHeight);
+
+    const warehouseTopY = this.node.position.y + warehouseTransform.contentSize.height * 0.5;
+    const areaY = warehouseTopY + this.junkAreaGap + areaHeight * 0.5;
+    this._junkAreaNode.setPosition(0, areaY, 0);
+
+    const areaTransform = this._junkAreaNode.getComponent(UITransform)!;
+    areaTransform.setContentSize(areaWidth, areaHeight);
+
+    const junkGraphics = this._junkAreaNode.getComponent(Graphics)!;
+    junkGraphics.clear();
+    junkGraphics.fillColor = this.junkAreaBackgroundColor;
+    junkGraphics.strokeColor = this.junkAreaBorderColor;
+    junkGraphics.lineWidth = 2;
+    const areaX = -areaWidth * 0.5;
+    const areaBottomY = -areaHeight * 0.5;
+    junkGraphics.roundRect(areaX, areaBottomY, areaWidth, areaHeight, 12);
+    junkGraphics.fill();
+    junkGraphics.stroke();
+
+    if (this._junkItemsNode) {
+      const itemsTransform = this._junkItemsNode.getComponent(UITransform);
+      if (itemsTransform) {
+        itemsTransform.setContentSize(areaWidth, areaHeight);
+      }
+      this._junkItemsNode.setPosition(0, 0, 0);
+    }
+
+    this.layoutJunkBoundaries(areaWidth, areaHeight);
+  }
+
+  private createJunkBoundary(name: string): Node {
+    const node = new Node(name);
+    const ui = node.addComponent(UITransform);
+    ui.setAnchorPoint(0.5, 0.5);
+    const rb = node.addComponent(RigidBody2D);
+    rb.type = ERigidBody2DType.Static;
+    const collider = node.addComponent(BoxCollider2D);
+    collider.density = 1;
+    collider.friction = 0.8;
+    collider.restitution = 0.05;
+    return node;
+  }
+
+  private layoutJunkBoundaries(areaWidth: number, areaHeight: number): void {
+    if (this._junkBoundaryNodes.length < 3) {
+      return;
+    }
+
+    const thickness = this.junkBoundaryThickness;
+    const left = this._junkBoundaryNodes[0];
+    const right = this._junkBoundaryNodes[1];
+    const bottom = this._junkBoundaryNodes[2];
+
+    this.setBoundaryRect(left, thickness, areaHeight, -areaWidth * 0.5 - thickness * 0.5, 0);
+    this.setBoundaryRect(right, thickness, areaHeight, areaWidth * 0.5 + thickness * 0.5, 0);
+    this.setBoundaryRect(bottom, areaWidth + thickness * 2, thickness, 0, -areaHeight * 0.5 - thickness * 0.5);
+  }
+
+  private setBoundaryRect(node: Node, width: number, height: number, x: number, y: number): void {
+    const ui = node.getComponent(UITransform);
+    const collider = node.getComponent(BoxCollider2D);
+    if (!ui || !collider) {
+      return;
+    }
+    ui.setContentSize(width, height);
+    node.setPosition(x, y, 0);
+    collider.size = new Size(width, height);
+    collider.offset = new Vec2(0, 0);
+  }
+
+  private ensurePhysicsEnabled(): void {
+    if (!PhysicsSystem2D.instance.enable) {
+      PhysicsSystem2D.instance.enable = true;
+      PhysicsSystem2D.instance.gravity = new Vec2(0, -1400);
+    }
   }
 
   /**
@@ -466,15 +603,21 @@ export class Warehouse extends Component {
           this.onDragPlaceSuccess();
         } else {
           console.warn(`[Warehouse] 放置失败`);
-          this.restoreDraggedPlacedItem();
+          this.restoreDragSource();
         }
       } else {
         console.log(`[Warehouse] 不能放置（重叠或越界）`);
-        this.restoreDraggedPlacedItem();
+        this.restoreDragSource();
       }
     } else {
       console.log(`[Warehouse] 位置不在有效范围内`);
-      this.restoreDraggedPlacedItem();
+      const uiPos = event.getUILocation();
+      const piled = this.tryDropItemToJunkArea(item, uiPos.x, uiPos.y);
+      if (piled) {
+        this.onDragPlaceSuccess();
+      } else {
+        this.restoreDragSource();
+      }
     }
 
     this.hidePreview();
@@ -486,7 +629,7 @@ export class Warehouse extends Component {
     if (!this._dragManager || !this._dragManager.isDragging()) {
       return;
     }
-    this.restoreDraggedPlacedItem();
+    this.restoreDragSource();
     this.hidePreview();
     this._dragManager.endDrag();
   }
@@ -643,6 +786,13 @@ export class Warehouse extends Component {
       node.destroy();
     }
     this._placedItems = [];
+
+    if (this._junkItemsNode) {
+      for (const node of [...this._junkItemsNode.children]) {
+        node.destroy();
+      }
+    }
+    this._junkItemMap.clear();
   }
 
   public startDragFromPlacedItem(placedNode: Node, touch: EventTouch): boolean {
@@ -680,12 +830,47 @@ export class Warehouse extends Component {
     this._draggingPlacedData = null;
   }
 
+  private restoreDraggedJunkItem(): void {
+    if (!this._draggingJunkNode || !this._draggingJunkItem) {
+      return;
+    }
+    this._draggingJunkNode.active = true;
+    this._draggingJunkNode.setPosition(
+      this._draggingJunkLocalPos.x,
+      this._draggingJunkLocalPos.y,
+      this._draggingJunkLocalPos.z
+    );
+    this._junkItemMap.set(this._draggingJunkNode, this._draggingJunkItem);
+    this._draggingJunkNode = null;
+    this._draggingJunkItem = null;
+    this._draggingJunkLocalPos.set(0, 0, 0);
+  }
+
+  private restoreDragSource(): void {
+    this.restoreDraggedPlacedItem();
+    this.restoreDraggedJunkItem();
+  }
+
   private onDragPlaceSuccess(): void {
     if (this._draggingPlacedData) {
       if (this._draggingPlacedData.node && this._draggingPlacedData.node.isValid) {
         this._draggingPlacedData.node.destroy();
       }
       this._draggingPlacedData = null;
+      this._draggingJunkNode = null;
+      this._draggingJunkItem = null;
+      this._draggingJunkLocalPos.set(0, 0, 0);
+      return;
+    }
+
+    if (this._draggingJunkNode) {
+      this._junkItemMap.delete(this._draggingJunkNode);
+      if (this._draggingJunkNode.isValid) {
+        this._draggingJunkNode.destroy();
+      }
+      this._draggingJunkNode = null;
+      this._draggingJunkItem = null;
+      this._draggingJunkLocalPos.set(0, 0, 0);
       return;
     }
 
@@ -756,5 +941,98 @@ export class Warehouse extends Component {
     }
 
     return data.item.isOccupied(row, col);
+  }
+
+  private onJunkItemTouchStart(event: EventTouch): void {
+    if (!this._junkItemsNode || !this._dragManager || this._dragManager.isDragging()) {
+      return;
+    }
+    const junkNode = event.currentTarget as Node;
+    const item = this._junkItemMap.get(junkNode);
+    if (!item) {
+      return;
+    }
+
+    const started = this.startDragFromJunkItem(junkNode, item, event);
+    if (started) {
+      event.propagationStopped = true;
+    }
+  }
+
+  private startDragFromJunkItem(junkNode: Node, item: BaseItem, touch: EventTouch): boolean {
+    if (!this._dragManager || this._dragManager.isDragging()) {
+      return false;
+    }
+    if (!junkNode.isValid) {
+      return false;
+    }
+
+    this._draggingJunkNode = junkNode;
+    this._draggingJunkItem = item;
+    this._draggingJunkLocalPos.set(junkNode.position.x, junkNode.position.y, junkNode.position.z);
+    this._junkItemMap.delete(junkNode);
+    junkNode.active = false;
+    this._dragManager.startDrag(item, null, touch, this.cellSize, this.itemSpacing);
+    return true;
+  }
+
+  private tryDropItemToJunkArea(item: BaseItem, uiX: number, uiY: number): boolean {
+    if (!this._junkAreaNode || !this._junkAreaNode.isValid || !this._junkItemsNode) {
+      return false;
+    }
+
+    const areaTransform = this._junkAreaNode.getComponent(UITransform);
+    if (!areaTransform) {
+      return false;
+    }
+
+    const localInArea = new Vec3();
+    areaTransform.convertToNodeSpaceAR(new Vec3(uiX, uiY, 0), localInArea);
+    const halfW = areaTransform.contentSize.width * 0.5;
+    const halfH = areaTransform.contentSize.height * 0.5;
+    if (localInArea.x < -halfW || localInArea.x > halfW || localInArea.y < -halfH || localInArea.y > halfH) {
+      return false;
+    }
+
+    const junkNode = new Node(`JunkItem_${Date.now()}`);
+    const uiTransform = junkNode.addComponent(UITransform);
+    const itemW = item.width * this.cellSize + (item.width - 1) * this.itemSpacing;
+    const itemH = item.height * this.cellSize + (item.height - 1) * this.itemSpacing;
+    uiTransform.setContentSize(itemW, itemH);
+    uiTransform.setAnchorPoint(0.5, 0.5);
+
+    const display = junkNode.addComponent(ItemDisplay);
+    display.cellSize = this.cellSize;
+    display.spacing = this.itemSpacing;
+    display.setItem(item);
+
+    const body = junkNode.addComponent(RigidBody2D);
+    body.type = ERigidBody2DType.Dynamic;
+    body.gravityScale = 1;
+    body.angularDamping = 3;
+    body.linearDamping = 0.4;
+
+    // 为镂空形状按占用格逐块添加碰撞体，避免空洞区域出现碰撞
+    const step = this.cellSize + this.itemSpacing;
+    const startX = -itemW * 0.5 + this.cellSize * 0.5;
+    const startY = itemH * 0.5 - this.cellSize * 0.5;
+    for (const [itemRow, itemCol] of item.getOccupiedPositions()) {
+      const collider = junkNode.addComponent(BoxCollider2D);
+      collider.size = new Size(this.cellSize, this.cellSize);
+      collider.offset = new Vec2(
+        startX + itemCol * step,
+        startY - itemRow * step
+      );
+      collider.density = 1;
+      collider.friction = 0.9;
+      collider.restitution = 0.05;
+    }
+
+    junkNode.setPosition(localInArea.x, localInArea.y, 0);
+    junkNode.angle = Math.random() * 14 - 7;
+    junkNode.on(Node.EventType.TOUCH_START, this.onJunkItemTouchStart, this);
+    this._junkItemsNode.addChild(junkNode);
+    this._junkItemMap.set(junkNode, item.clone());
+    return true;
   }
 }
